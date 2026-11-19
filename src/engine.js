@@ -5,7 +5,7 @@
    Dados: arquivo do Gi (seed.json, até à véspera da publicação) + ESPN.
    Só vai à internet quando carregas em ↻. Tudo fica no telemóvel («gi_…»).
    ===================================================================== */
-const APP_VER = '1.0.0';
+const APP_VER = '1.1.0';
 
 /* ---------- utilitários ---------- */
 const $ = s => document.querySelector(s);
@@ -72,6 +72,7 @@ let GKSEL = objOr(LS.get('gksel', {}));          // guarda-redes que escolhes na
 const CFG_DEF = { bank: { tu: 100, gi: 100, pi: 250 }, min: 0.25, piOn: true, piStake: 2.5, evMin: 0.05, mktW: 0.85, oddMin: 1.30, oddMax: 4.50 };
 let CFG = Object.assign({}, CFG_DEF, objOr(LS.get('cfg', {})));
 CFG.bank = Object.assign({}, CFG_DEF.bank, CFG.bank || {});
+if (CFG.botV !== 1) { CFG.piOn = true; CFG.botV = 1; }   // o piloto passou a ser o «Gi sozinho», ligado de origem
 const saveDB = () => LS.set('db', DB);
 const saveBets = () => LS.set('bets', BETS);
 let SEED = null;                                  // carregado de seed.json no arranque
@@ -509,9 +510,9 @@ function snapshotPreds() {
 }
 
 /* =====================================================================
-   3) CONTAS: Tu · Mister Gi · Piloto automático
+   3) CONTAS: Tu · Mister Gi · Gi sozinho (bot)
    ===================================================================== */
-const ACC = { tu: { n: 'Tu', ic: 'star', c: 'var(--c-blue)' }, gi: { n: 'Mister Gi', ic: 'puck', c: 'var(--c-orange)' }, pi: { n: 'Piloto', ic: 'robot', c: 'var(--c-purple)' } };
+const ACC = { tu: { n: 'Tu', ic: 'star', c: 'var(--c-blue)' }, gi: { n: 'Mister Gi', ic: 'puck', c: 'var(--c-orange)' }, pi: { n: 'Gi sozinho', ic: 'robot', c: 'var(--c-purple)' } };
 function accStats(acc) {
   const B = BETS.filter(b => b.acc === acc);
   const dep = DEPOS.filter(d => d.acc === acc).reduce((s, d) => s + d.v, 0);
@@ -574,20 +575,43 @@ function settleAll() {
   return n;
 }
 /* 🤖 piloto: aposta sozinho em cada «valor» do Gi — só com odds reais (ESPN ou Betano que meteste) */
+/* =====================================================================
+   🤖 Gi SOZINHO: um bot que aposta sozinho, sem ninguém lhe mexer.
+   Regra fixa: em cada jogo das próximas 36 horas, aposta no vencedor que a
+   cabeça dele (o modelo puro, sem copiar as odds) prefere, à odd da ESPN do
+   momento. Valor fixo. Serve para ver como ele se porta de verdade.
+   Teste às cegas 2023-27: acerta 58% dos vencedores (não há odds históricas grátis da NHL para medir o lucro).
+   ===================================================================== */
+const BOT_TEST = { acerto: 0.58, roi: null, n: null, txt: '58% de acerto (2023-27) · lucro por medir' };
 function pilotRun() {
   if (!CFG.piOn) return 0;
   const now = Date.now(); let n = 0;
   const done = new Set(BETS.filter(b => b.acc === 'pi' && b.mk !== 'multi').map(b => b.g));
-  Object.values(DB.g).filter(g => TEAMS[g.h] && TEAMS[g.a] && g.s === 'pre' && !done.has(g.id)).forEach(g => {
+  Object.values(DB.g).filter(g => TEAMS[g.h] && TEAMS[g.a] && g.s === 'pre' && !done.has(g.id) && g.o && g.o.hml > 1 && g.o.aml > 1).sort((x, y) => x.d < y.d ? -1 : 1).forEach(g => {
     const t0 = new Date(g.d).getTime(); if (t0 < now + 5 * 60e3 || t0 > now + 36 * 3600e3) return;
-    const v = predict(g).value; if (!v) return;
-    const stake = Math.max(CFG.min, r2(CFG.piStake));
-    if (accStats('pi').bal < stake) return;
-    newBet('pi', g, v, stake, { p: r2(v.p), ev: r2(v.ev), src: v.src }); n++;
+    const P = predict(g), ph = P.mod.ml, sel = ph >= 0.5 ? 'h' : 'a', odd = sel === 'h' ? g.o.hml : g.o.aml;
+    const nva = (1 / g.o.hml) / (1 / g.o.hml + 1 / g.o.aml);
+    const stake = Math.max(CFG.min, r2(CFG.piStake)); if (accStats('pi').bal < stake) return;
+    newBet('pi', g, { mk: 'ml', sel, line: null, odd }, stake, { auto: 1, pk: r2(sel === 'h' ? ph : 1 - ph), nv: r2(sel === 'h' ? nva : 1 - nva), src: g.o.p || 'ESPN' });
+    n++;
   });
   if (n) saveBets();
   return n;
 }
+function botStats() {
+  const B = BETS.filter(b => b.acc === 'pi' && b.auto), S = B.filter(b => b.st === 'won' || b.st === 'lost' || b.st === 'push');
+  const w = S.filter(b => b.st === 'won').length, l = S.filter(b => b.st === 'lost').length;
+  const plOf = L => r2(L.reduce((s, b) => s + (b.ret || 0) - b.stake, 0));
+  const dog = S.filter(b => b.nv != null && b.nv < 0.5), fav = S.filter(b => b.nv != null && b.nv >= 0.5), conf = S.filter(b => b.pk >= 0.7);
+  const st = S.reduce((s, b) => s + b.stake, 0), ret = S.reduce((s, b) => s + (b.ret || 0), 0);
+  const byD = {}; S.forEach(b => { const k = String(b.gd).slice(0, 10); (byD[k] = byD[k] || []).push(b); });
+  const days = Object.entries(byD).map(([k, L]) => ({ k, w: L.filter(b => b.st === 'won').length, l: L.filter(b => b.st === 'lost').length, pl: plOf(L) })).sort((a, b) => a.k < b.k ? 1 : -1);
+  const byG = {}; S.forEach(b => { const k = ''; if (!k) return; const o = byG[k] = byG[k] || { n: 0, w: 0, pl: 0 }; o.n++; if (b.st === 'won') o.w++; o.pl += (b.ret || 0) - b.stake; });
+  let run = 0; const curve = S.slice().sort((a, b) => (a.tset || a.t) - (b.tset || b.t)).map(b => (run += (b.ret || 0) - b.stake));
+  return { n: B.length, open: B.filter(b => b.st === 'open').length, openL: B.filter(b => b.st === 'open'), w, l, p: S.length - w - l, hit: w + l ? w / (w + l) : null, roi: st ? (ret - st) / st : null, pl: r2(ret - st),
+    dogN: dog.length, dogW: dog.filter(b => b.st === 'won').length, dogPl: plOf(dog), favN: fav.length, favW: fav.filter(b => b.st === 'won').length, favPl: plOf(fav), confN: conf.length, confW: conf.filter(b => b.st === 'won').length, days, byG, curve };
+}
+
 
 /* =====================================================================
    🛡️ BOLETIM SEGURO: seleções com ≥85% (e ≤95%, senão não paga nada),
