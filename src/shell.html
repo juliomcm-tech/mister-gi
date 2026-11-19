@@ -150,6 +150,9 @@ svg.i{width:1.15em;height:1.15em;vertical-align:-.2em;flex:0 0 auto}
 .team .nm.lg{font-size:.88rem} .team .nm.xl{font-size:.78rem}
 .team .rc{font:400 .74rem/1.25 var(--f);color:var(--mut);white-space:nowrap}
 .logo{flex:0 0 52px;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 .82rem var(--f);color:#fff;border:3px solid #fff;box-shadow:0 6px 14px rgba(12,50,95,.28),inset 0 -6px 12px rgba(0,0,0,.18);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.logo{position:relative;overflow:hidden}
+.logo img+b{visibility:hidden}
+.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:12%;background:#fff;border-radius:50%}
 .vsx{font:300 1.7rem/1 var(--f);color:var(--ink2);letter-spacing:.04em;position:relative;padding:0 6px}
 .vsx:before,.vsx:after{content:"";position:absolute;top:50%;width:22px;height:1px;background:rgba(12,36,64,.25)}
 .vsx:before{right:100%}.vsx:after{left:100%}

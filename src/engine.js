@@ -154,7 +154,8 @@ function ingest(ev) {
   const H = c.competitors.find(x => x.homeAway === 'home'), A = c.competitors.find(x => x.homeAway === 'away');
   if (!H || !A || !H.team || !A.team) return null;
   const h = nhlAb(H.team.abbreviation), a = nhlAb(A.team.abbreviation);
-  if (!h || !a) return null;                                                           // All-Star, jogos contra seleções…
+  if (!h || !a) return null;
+  DB.logos = DB.logos || {}; [[h, H.team], [a, A.team]].forEach(([k, t]) => { const u = t.logo || (t.logos && t.logos[0] && t.logos[0].href); if (u && /^https:\/\//.test(u)) DB.logos[k] = u; });                                                           // All-Star, jogos contra seleções…
   const ty = ev.season && ev.season.type;
   if (ty && [2, 3].indexOf(Number(ty)) < 0) return null;                               // só época regular e playoffs
   const S = (c.status || ev.status || {}), st = S.type || {};

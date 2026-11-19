@@ -150,6 +150,9 @@ svg.i{width:1.15em;height:1.15em;vertical-align:-.2em;flex:0 0 auto}
 .team .nm.lg{font-size:.88rem} .team .nm.xl{font-size:.78rem}
 .team .rc{font:400 .74rem/1.25 var(--f);color:var(--mut);white-space:nowrap}
 .logo{flex:0 0 52px;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 .82rem var(--f);color:#fff;border:3px solid #fff;box-shadow:0 6px 14px rgba(12,50,95,.28),inset 0 -6px 12px rgba(0,0,0,.18);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.logo{position:relative;overflow:hidden}
+.logo img+b{visibility:hidden}
+.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:12%;background:#fff;border-radius:50%}
 .vsx{font:300 1.7rem/1 var(--f);color:var(--ink2);letter-spacing:.04em;position:relative;padding:0 6px}
 .vsx:before,.vsx:after{content:"";position:absolute;top:50%;width:22px;height:1px;background:rgba(12,36,64,.25)}
 .vsx:before{right:100%}.vsx:after{left:100%}
@@ -430,7 +433,8 @@ function ingest(ev) {
   const H = c.competitors.find(x => x.homeAway === 'home'), A = c.competitors.find(x => x.homeAway === 'away');
   if (!H || !A || !H.team || !A.team) return null;
   const h = nhlAb(H.team.abbreviation), a = nhlAb(A.team.abbreviation);
-  if (!h || !a) return null;                                                           // All-Star, jogos contra seleções…
+  if (!h || !a) return null;
+  DB.logos = DB.logos || {}; [[h, H.team], [a, A.team]].forEach(([k, t]) => { const u = t.logo || (t.logos && t.logos[0] && t.logos[0].href); if (u && /^https:\/\//.test(u)) DB.logos[k] = u; });                                                           // All-Star, jogos contra seleções…
   const ty = ev.season && ev.season.type;
   if (ty && [2, 3].indexOf(Number(ty)) < 0) return null;                               // só época regular e playoffs
   const S = (c.status || ev.status || {}), st = S.type || {};
@@ -1087,10 +1091,14 @@ let DAY = 0, ACCF = 'all', BT = 'seg', GT = 'ana', SORT = LS.get('sort', 'hora')
 function go(v) { VIEW = v; history.replaceState(null, '', '#' + v); render(); window.scrollTo(0, 0); }
 function setUpd(t) { const e = $('#upd'); if (e) e.textContent = t; }
 const tCol = t => '#' + ((TEAMS[t] && TEAMS[t][2]) || '1d6fc4');
+/* emblema da equipa: o que a própria ESPN manda nos dados (carregado no telemóvel); se falhar, fica o círculo com as cores */
+const NHL2ESPN = { LAK: 'la', NJD: 'nj', SJS: 'sj', TBL: 'tb', UTA: 'utah' };
+const logoUrl = t => (DB.logos && DB.logos[t]) || `https://a.espncdn.com/i/teamlogos/nhl/500/${(NHL2ESPN[t] || t).toLowerCase()}.png`;
 function logo(t, sz) {
   const T = TEAMS[t] || ['?', '?', '1d6fc4', 'ffffff'];
   const s = sz ? `width:${sz}px;height:${sz}px;flex-basis:${sz}px;font-size:${sz / 3.6}px;` : '';
-  return `<span class="logo" style="${s}background:radial-gradient(circle at 35% 30%,#${T[2]}dd,#${T[2]} 55%,#${T[3] === 'ffffff' ? '0c2440' : T[3]})">${esc(t)}</span>`;
+  const bg = `radial-gradient(circle at 35% 30%,#${T[2]}dd,#${T[2]} 55%,#${T[3] === 'ffffff' ? '0c2440' : T[3]})`;
+  return `<span class="logo" style="${s}background:${bg}"><img src="${esc(logoUrl(t))}" alt="${esc(t)}" loading="lazy" onerror="this.remove()"><b>${esc(t)}</b></span>`;
 }
 function renderTop() {
   $('#chips').innerHTML = ['tu', 'gi', 'pi'].map(k => `<span class="st" onclick="ACCF='${k}';go('contas')">${ic(ACC[k].ic)}${ACC[k].n.replace('Mister ', '')} ${eur(accStats(k).bal)}</span>`).join('');

@@ -54,10 +54,14 @@ let DAY = 0, ACCF = 'all', BT = 'seg', GT = 'ana', SORT = LS.get('sort', 'hora')
 function go(v) { VIEW = v; history.replaceState(null, '', '#' + v); render(); window.scrollTo(0, 0); }
 function setUpd(t) { const e = $('#upd'); if (e) e.textContent = t; }
 const tCol = t => '#' + ((TEAMS[t] && TEAMS[t][2]) || '1d6fc4');
+/* emblema da equipa: o que a própria ESPN manda nos dados (carregado no telemóvel); se falhar, fica o círculo com as cores */
+const NHL2ESPN = { LAK: 'la', NJD: 'nj', SJS: 'sj', TBL: 'tb', UTA: 'utah' };
+const logoUrl = t => (DB.logos && DB.logos[t]) || `https://a.espncdn.com/i/teamlogos/nhl/500/${(NHL2ESPN[t] || t).toLowerCase()}.png`;
 function logo(t, sz) {
   const T = TEAMS[t] || ['?', '?', '1d6fc4', 'ffffff'];
   const s = sz ? `width:${sz}px;height:${sz}px;flex-basis:${sz}px;font-size:${sz / 3.6}px;` : '';
-  return `<span class="logo" style="${s}background:radial-gradient(circle at 35% 30%,#${T[2]}dd,#${T[2]} 55%,#${T[3] === 'ffffff' ? '0c2440' : T[3]})">${esc(t)}</span>`;
+  const bg = `radial-gradient(circle at 35% 30%,#${T[2]}dd,#${T[2]} 55%,#${T[3] === 'ffffff' ? '0c2440' : T[3]})`;
+  return `<span class="logo" style="${s}background:${bg}"><img src="${esc(logoUrl(t))}" alt="${esc(t)}" loading="lazy" onerror="this.remove()"><b>${esc(t)}</b></span>`;
 }
 function renderTop() {
   $('#chips').innerHTML = ['tu', 'gi', 'pi'].map(k => `<span class="st" onclick="ACCF='${k}';go('contas')">${ic(ACC[k].ic)}${ACC[k].n.replace('Mister ', '')} ${eur(accStats(k).bal)}</span>`).join('');
