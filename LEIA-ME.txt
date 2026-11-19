@@ -1,0 +1,6 @@
+Mister Gi · NHL
+App de análise de jogos da NHL (hóquei no gelo) e duelo de apostas virtuais.
+Abrir: https://juliomcm-tech.github.io/mister-gi/
+Ficheiros da app: index.html, seed.json (arquivo do modelo), players.json (marcadores), sw.js, manifest.webmanifest, ícones, bg.webp.
+Código-fonte em src/ (python3 src/build.py gera o index.html). Estudos e testes às cegas em estudos/.
+Simulação, sem dinheiro real. © 2026 Júlio Melo
