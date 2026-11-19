@@ -5,7 +5,7 @@
    Dados: arquivo do Gi (seed.json, até à véspera da publicação) + ESPN.
    Só vai à internet quando carregas em ↻. Tudo fica no telemóvel («gi_…»).
    ===================================================================== */
-const APP_VER = '1.1.1';
+const APP_VER = '1.1.2';
 
 /* ---------- utilitários ---------- */
 const $ = s => document.querySelector(s);
