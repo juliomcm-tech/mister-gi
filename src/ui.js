@@ -389,6 +389,8 @@ function saveBO(id) {
   const keys = ['x1', 'xx', 'x2', 'mh', 'ma', 'tl', 'to', 'tu', 'hl', 'hh', 'ha'], o = {};
   keys.forEach(k => { const e = $('#bo_' + k); const v = e ? num(e.value) : null; if (v != null) o[k] = v; });
   ['x1', 'xx', 'x2', 'mh', 'ma', 'to', 'tu', 'hh', 'ha'].forEach(k => { if (o[k] != null && !(o[k] > 1 && o[k] < 60)) delete o[k]; });
+  if ((o.to || o.tu) && o.tl == null) o.tl = 5.5;
+  if ((o.hh || o.ha) && o.hl == null) o.hl = -1.5;
   if (o.tl != null && !(o.tl > 0 && o.tl < 15)) delete o.tl;
   if (o.hl != null && Math.abs(o.hl) > 5) delete o.hl;
   if (Object.keys(o).length) BO[id] = o; else delete BO[id];
@@ -426,7 +428,7 @@ function tabMarcadores(g, P) {
     h += catH('star', esc(tName(t)), tCol(t), 'marcar · pontos · 3+ remates');
     h += `<table class="tbl"><tr><th>Jogador</th><th>Golo</th><th>Ponto</th><th>3+ rem.</th></tr>` + T.map(x => `<tr><td>${esc(x.n)}<div class="small muted">${x.pos === 'D' ? 'defesa' : 'avançado'} · ${x.toi.toFixed(0)} min/jogo</div></td><td><b>${pct(x.p)}</b><div class="small muted">${odd2(1 / x.p)}</div></td><td>${pct(x.pp)}</td><td>${pct(x.ps3)}</td></tr>`).join('') + '</table>';
   });
-  return h + `<div class="small muted" style="margin-top:8px">Cada jogador: golos, pontos e remates por 60 minutos (época passada + esta, mais peso no recente), minutos em gelo e a força da equipa e do adversário neste jogo. <b>Confirma se joga</b>: lesões e escolhas do treinador não estão aqui. Odd = odd justa.</div>`;
+  return h + `<div class="small muted" style="margin-top:8px">Cada jogador: golos, pontos e remates por 60 minutos (épocas recentes, mais peso no recente), minutos em gelo, defesa do adversário, casa/fora, cansaço e power play. Testado às cegas em 113 mil jogos de jogadores: calibrado nos golos e pontos; nos remates altos, desconta 2-3%. <b>Confirma se joga</b>: lesões e escolhas do treinador não estão aqui. Odd = odd justa.</div>`;
 }
 
 /* ---------- APOSTAR (e o Gi responde) ---------- */
@@ -446,11 +448,15 @@ function presetBF() {
   const c = P.cands.find(x => x.mk === BF.mk && x.sel === BF.sel && (x.line == null || x.line === BF.line));
   BF.odd = c ? c.odd : '';
 }
+function sideFix() {
+  const P = predict(DB.g[BF.id]), c = P.cands.find(x => x.mk === BF.mk && x.sel === BF.sel);
+  if (c) { BF.line = c.line; BF.odd = c.odd; } else { if (BF.mk === 'pl' && BF.line != null) BF.line = -BF.line; BF.odd = ''; }
+}
 function drawBet() {
   const g = DB.g[BF.id];
   const segMk = BF.lockMk ? `<div class="small"><b>${esc(mkName(BF.mk))}</b></div>` : `<div class="seg">${MKS.map(([k, t]) => `<button class="${BF.mk === k ? 'on' : ''}" onclick="BF.mk='${k}';BF.sel='${k === 'tot' ? 'o' : 'h'}';presetBF();drawBet()">${t}</button>`).join('')}</div>`;
   const sels = BF.mk === 'tot' || BF.mk === 'tto' ? [['o', 'Mais'], ['u', 'Menos']] : BF.mk === '1x2' ? [['h', g.h], ['x', 'Empate'], ['a', g.a]] : [['h', tName(g.h)], ['a', tName(g.a)]];
-  const segSel = sels.map(([k, t]) => `<button class="${BF.sel === k ? 'on' : ''}" onclick="BF.sel='${k}';${BF.lockMk ? '' : 'presetBF();'}drawBet()">${esc(t)}</button>`).join('');
+  const segSel = sels.map(([k, t]) => `<button class="${BF.sel === k ? 'on' : ''}" onclick="BF.sel='${k}';${BF.lockMk ? 'sideFix();' : 'presetBF();'}drawBet()">${esc(t)}</button>`).join('');
   const needLine = ['hc', 'tot', 'pl', 'tto'].includes(BF.mk);
   openSheet('A tua aposta', `<div class="small muted">${esc(gLabel(g))} · ${dayLbl(g.d)} ${hhmm(g.d)}</div>
    <label class="f">Mercado</label>${segMk}
@@ -467,7 +473,7 @@ function readBF() { const nl = ['hc', 'tot', 'pl', 'tto'].includes(BF.mk); BF.li
 function betOpinion() {
   readBF();
   const g = DB.g[BF.id], P = predict(g), box = $('#bOp'), nl = ['hc', 'tot', 'pl', 'tto'].includes(BF.mk);
-  if (nl && BF.line == null) { box.className = 'opinion'; box.innerHTML = `<div class="face">${giFace('ok')}</div><div>Diz-me a linha.</div>`; return; }
+  if (nl && BF.line == null) { $('#bGo').disabled = true; box.className = 'opinion'; box.innerHTML = `<div class="face">${giFace('ok')}</div><div>Diz-me a linha.</div>`; return; }
   const q = probs(P, BF.mk, BF.sel, BF.line), p = q.w, fair = fairOf(q);
   let cls = 'opinion', mood = 'ok', msg;
   if (!(BF.odd > 1)) msg = `Para mim isto acontece ${pct(p)} das vezes${q.push > 0.005 ? ` (e ${pct(q.push)} é devolvida)` : ''}. Odd justa: <b>${odd2(fair)}</b>.`;
@@ -486,6 +492,8 @@ function betOpinion() {
 function placeBet() {
   readBF();
   const g = DB.g[BF.id]; if (!canBet(g)) return toast('O jogo já começou');
+  const nl = ['hc', 'tot', 'pl', 'tto'].includes(BF.mk);
+  if ((nl && BF.line == null) || !(BF.odd > 1) || !(BF.stake >= CFG.min) || BF.stake > accStats('tu').bal) return toast('Falta a linha, a odd ou o valor');
   const P = predict(g);
   const c = { mk: BF.mk, sel: BF.sel, line: BF.line, odd: BF.odd };
   const q = probs(P, c.mk, c.sel, c.line), p = q.w, mineEv = evOf(q, c.odd);
@@ -512,6 +520,8 @@ function placeBet() {
 }
 function voidBet(id) {
   const b = BETS.find(x => x.id === id); if (!b || b.st !== 'open') return;
+  const gs = b.legs ? b.legs.map(l => DB.g[l.g]) : [DB.g[b.g]];
+  if (gs.some(g => !canBet(g))) { closeSheet(); return toast('O jogo já começou: já não dá para anular'); }
   BETS.filter(x => x.duel && x.duel === b.duel && (x.st === 'open' || x.st === 'pass')).concat([b]).forEach(x => { if (x.st === 'pass') x.st = 'void'; else { x.st = 'void'; x.ret = x.stake; } x.tset = Date.now(); });
   saveBets(); closeSheet(); toast('Aposta anulada (o dinheiro voltou)'); render();
 }
@@ -791,5 +801,9 @@ $('#btnRefresh').innerHTML = ic('refresh');
 document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (VIEWS.includes(v) && v !== VIEW) { VIEW = v; render(); } });
 render();
-fetch('seed.json').then(r => r.json()).then(j => { SEED = j; MODEL = null; settleAll(); render(); loadPlayers(); }).catch(() => toast('Não consegui abrir o arquivo do Gi (seed.json)'));
+function loadSeed() {
+  fetch('seed.json').then(r => r.json()).then(j => { SEED = j; MODEL = null; settleAll(); render(); loadPlayers(); })
+    .catch(() => { $('#view').innerHTML = `<div class="pn empty" style="margin-top:40px"><div class="face">${giFace('sad')}</div>Não consegui abrir o arquivo do Gi.<br><button class="btn fill" style="margin-top:12px" onclick="loadSeed()">${ic('refresh')} Tentar outra vez</button></div>`; });
+}
+loadSeed();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -2,7 +2,8 @@
    4) MARCADORES (estudo dos jogadores, testado às cegas)
    Para cada jogador: golos, pontos e remates por 60 min (encolhidos para a média
    da posição), minutos em gelo esperados, e o jogo: defesa do adversário,
-   guarda-redes do adversário, casa/fora, cansaço, papel no power play.
+   casa/fora, cansaço, papel no power play, tendência da liga.
+   (O guarda-redes do adversário foi testado e não ajudou: ficou de fora.)
    λ = e^(soma) → P(marca) = 1 − e^(−λ).  Remates: binomial negativa.
    Os números vêm de players.json (gerado pelo estudo, até à véspera da publicação).
    ===================================================================== */
@@ -64,8 +65,8 @@ function propGrade() {
   Object.values(PROPS).forEach(x => {
     if (x.w != null) return; const g = DB.g[x.g]; if (!g || g.s !== 'post' || !g.sk) return;
     const side = x.t === g.h ? 'h' : 'a', list = g.sk[side] || [];
-    const me = list.find(s => s[0] === x.k);
-    x.w = me ? (me[1] > 0 ? 1 : 0) : -1; ch = true;
+    const mine = list.filter(s => s[0] === x.k);
+    x.w = mine.length === 1 ? (mine[0][1] > 0 ? 1 : 0) : -1; ch = true;   // não jogou, ou dois com o mesmo nome → não conta
   });
   if (ch) LS.set('props', PROPS);
 }

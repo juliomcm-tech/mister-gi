@@ -1,0 +1,111 @@
+{
+ "modelo": "Mister Gi · NHL props de jogador (marcador, pontos, remates)",
+ "dados_ate": "2026-11-18",
+ "afinado_em": "2018-19 a 2023-24 (temporada regular + playoffs)",
+ "teste_cego": "2024-25, 2025-26, 2026-27 até 2026-11-18",
+ "constantes": {
+  "relogio_taxas": "game (jogos do jogador + defeso)",
+  "meia_vida_golos": 200,
+  "meia_vida_pontos": 140,
+  "meia_vida_remates": 60,
+  "unidade_meia_vida": "jogos",
+  "jogos_ficticios_defeso_goff": 40,
+  "K_golos_min": 1000,
+  "K_pontos_min": 400,
+  "K_remates_min": 200,
+  "gama_golos": 0.9,
+  "gama_pontos": 0.9,
+  "gama_remates": 0,
+  "meia_vida_toi_jogos": 3,
+  "k_toi_jogos": 0.25,
+  "equipas": {
+   "eta_golos": 0.012,
+   "regressao_epoca_golos": 0.7,
+   "eta_remates": 0.03,
+   "regressao_epoca_remates": 0.6
+  },
+  "guarda_redes": {
+   "meia_vida_jogos": 40,
+   "K_remates": 1000
+  },
+  "nb_tamanho_r_remates": 19.503
+ },
+ "priors_posicao_2026_27": {
+  "F": {
+   "golos60": 0.8626,
+   "pontos60": 2.043,
+   "remates60": 6.6693,
+   "toi_medio_min": 15.176,
+   "pp_share": 0.2068
+  },
+  "D": {
+   "golos60": 0.2391,
+   "pontos60": 1.0727,
+   "remates60": 3.9392,
+   "toi_medio_min": 19.357,
+   "pp_share": 0.1538
+  },
+  "nota": "médias da liga em 2025-26 (época anterior); atualizar no início de cada época"
+ },
+ "coeficientes": {
+  "golo_1mais": {
+   "const": 0.02931,
+   "lbase": 1.02816,
+   "def_opp": 0.90652,
+   "ha": 0.07038,
+   "b2b_own": -0.03976,
+   "ppsh": 0.37816,
+   "lgtrend": 0.13948
+  },
+  "ponto_1mais": {
+   "const": 0.02649,
+   "lbase": 1.06433,
+   "def_opp": 1.05445,
+   "ha": 0.06846,
+   "b2b_own": -0.05829,
+   "b2b_opp": 0.07245,
+   "ppsh": 0.18121,
+   "lgtrend": 0.22718
+  },
+  "remates": {
+   "const": -0.0887,
+   "lbase": 1.11279,
+   "sdef_opp": 0.98719,
+   "satt_own": 0.09735,
+   "ha": 0.03817,
+   "b2b_own": -0.01672,
+   "b2b_opp": 0.03738,
+   "lgtrend": 0.69465
+  }
+ },
+ "significado_features": {
+  "lbase": "ln(base) — base = (taxa por 60 encolhida / 60) × TOI esperado",
+  "def_opp": "ln(def do adversário) — rating defensivo de golos do adversário (1 = média; >1 sofre mais)",
+  "ha": "+0.5 se joga em casa, −0.5 se fora",
+  "b2b_own": "1 se a equipa do jogador jogou no dia anterior",
+  "ppsh": "quota de golos em powerplay do jogador (encolhida) menos a média da liga",
+  "lgtrend": "ln(tendência da liga) — taxa da liga (mesma posição) nos últimos ~30 dias a dividir pela taxa com a meia-vida do mercado; valor atual em players_seed.json → league.tendencia",
+  "b2b_opp": "1 se o adversário jogou no dia anterior",
+  "sdef_opp": "ln(sdef do adversário) — remates concedidos pelo adversário (1 = média)",
+  "satt_own": "ln(satt da própria equipa) — remates produzidos pela equipa (1 = média)"
+ },
+ "formulas_texto": [
+  "1) TOI esperado (min) = (Σ w·TOI + k_toi·TOI_médio_posição) / (Σ w + k_toi), com w = 0.5^(jogos_atrás/meia_vida_toi); o jogo mais recente tem jogos_atrás = 1.",
+  "2) Prior da posição para cada mercado: prior60 = média_liga60_posição × (TOI_esperado / TOI_médio_posição)^gama.",
+  "3) Taxa encolhida por 60 = (Σ w·eventos + K·prior60/60) / (Σ w·TOI + K) × 60, com w = 0.5^((jogos_atrás + 40·mudanças_de_época_entre_esse_jogo_e_o_próximo)/meia_vida); o jogo mais recente tem jogos_atrás = 1 (K = minutos de gelo «fictícios» jogados à taxa prior).",
+  "3b) Tendência da liga (lgtrend) = taxa da liga por 60 (mesma posição) com meia-vida de 30 dias ÷ a mesma taxa com meia-vida de 2.2×H dias (≈ H jogos) do mercado. Valor atual em players_seed.json → league.tendencia (recalcular quando se atualizar o seed).",
+  "4) base = taxa60/60 × TOI_esperado (eventos esperados no jogo antes de olhar ao adversário).",
+  "5) η = const + Σ coef_i·feature_i (ver coeficientes; lbase = ln(base)).",
+  "6) Golo/Ponto: λ = e^η ;  P(≥1) = 1 − e^(−λ).",
+  "7) Remates: μ = e^η ; Binomial Negativa com tamanho r: p0 = (r/(r+μ))^r ; p(k+1) = p(k)·(k+r)/(k+1)·μ/(r+μ) ; P(+1.5) = 1−p0−p1 ; P(+2.5) = P(+1.5)−p2 ; P(+3.5) = P(+2.5)−p3.",
+  "8) Equipas: xG_casa = L·√HA·att_casa·def_fora ; após cada jogo: att += eta·(golos/(L_lado·def_adv) − att) ; def_adv += eta·(golos/(L_lado·att) − def_adv) ; L_lado = L·√HA (casa) ou L/√HA (fora). No início de cada época: rating = 1 + regressão·(rating − 1). Remates: igual com satt/sdef, LS, HA_remates, eta_remates. Golos do desempate por penáltis não contam.",
+  "9) Guarda-redes: sv_encolhido = (Σ w·defesas + K·Lsv)/(Σ w·remates + K), w = 0.5^(jogos_atrás/meia_vida). gk_opp = (1 − sv_encolhido)/(1 − Lsv) do titular adversário (confirmar titular antes do jogo)."
+ ],
+ "pseudocodigo_js": "function probs(pl, own, opp, home, b2bOwn, b2bOpp, gkSv, C, S){\n  const lg=S.league, T=S.teams;\n  const f={def_opp:Math.log(T[opp][1]), att_own:Math.log(T[own][0]), sdef_opp:Math.log(T[opp][3]), satt_own:Math.log(T[own][2]),\n           gk_opp:Math.log((1-gkSv)/(1-lg.Lsv)), ha:home?0.5:-0.5, b2b_own:b2bOwn?1:0, b2b_opp:b2bOpp?1:0, ppsh:pl.pp_share-C.priors[pl.pos].pp_share};\n  const eta=(m,base)=>{let e=C.coef[m].const; for(const k in C.coef[m]){ if(k==='const')continue; e+=C.coef[m][k]*(k==='lbase'?Math.log(base):k==='lgtrend'?Math.log(lg.tendencia[m][pl.pos]):f[k]); } return e;};\n  const toi=pl.toi_esperado_min;\n  const lg1=Math.exp(eta('golo_1mais', pl.golos60/60*toi)), lp1=Math.exp(eta('ponto_1mais', pl.pontos60/60*toi));\n  const mu=Math.exp(eta('remates', pl.remates60/60*toi)), r=C.r;\n  let p=[Math.pow(r/(r+mu),r)]; for(let k=0;k<3;k++) p.push(p[k]*(k+r)/(k+1)*mu/(r+mu));\n  return {golo:1-Math.exp(-lg1), ponto:1-Math.exp(-lp1), rem15:1-p[0]-p[1], rem25:1-p[0]-p[1]-p[2], rem35:1-p[0]-p[1]-p[2]-p[3]};\n}",
+ "notas": [
+  "As taxas em players_seed.json já vêm encolhidas e com TOI esperado calculado à data 2026-11-18.",
+  "Se um guarda-redes titular não estiver na lista, usar gk_opp = 0 (factor 1).",
+  "Equipa sem rating: usar 1.",
+  "O modelo assume que o jogador joga; lesões/escolhas do treinador (scratches) não são previstas — confirmar o alinhamento."
+ ]
+}

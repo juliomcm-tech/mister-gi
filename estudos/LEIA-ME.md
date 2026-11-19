@@ -31,3 +31,6 @@ Todas ajudaram: remates (a maior), cansaço, casa, guarda-redes, empates extra (
 
 ### Conclusão honesta
 O Gi é bom (58%, calibrado), mas a casa de apostas acerta um pouco melhor sozinha: por isso a app junta as odds da ESPN com 85% de peso, e o valor a sério está em comparar a **odd justa** com a da Betano.
+
+## Marcadores (`marcadores/`)
+Golo, ponto e remates de cada jogador (taxas por 60 min encolhidas para a média da posição × minutos esperados, ajustadas à defesa do adversário, casa/fora, cansaço, power play e tendência da liga). Teste às cegas em 112.957 jogos de jogadores (2024-25 → 2026-27): melhor do que todas as referências simples em todos os mercados; golos e pontos calibrados a ±1 ponto; remates altos 2-4 pontos otimistas. O guarda-redes do adversário foi testado e não ajudou. Detalhes em `marcadores/README.md`.

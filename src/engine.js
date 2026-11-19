@@ -119,7 +119,7 @@ function parseOdds(o, hab, aab) {
   } catch (e) {}
   if (hl == null && o.details) {
     const m = String(o.details).match(/^([A-Z]{2,4})\s+([+-]?\d+(?:\.\d+)?)/);
-    if (m) { const v = Math.abs(+m[2]), ab = nhlAb(m[1]); hl = ab === hab ? -v : ab === aab ? v : null; }
+    if (m && Math.abs(+m[2]) <= 3.5) { const v = Math.abs(+m[2]), ab = nhlAb(m[1]); hl = ab === hab ? -v : ab === aab ? v : null; }
   }
   if (hl == null && o.spread != null && o.homeTeamOdds) { const v = Math.abs(+o.spread); if (o.homeTeamOdds.favorite) hl = -v; else if (o.awayTeamOdds && o.awayTeamOdds.favorite) hl = v; }
   if (tl == null && o.overUnder != null) tl = num(o.overUnder);
@@ -138,7 +138,7 @@ function parseOdds(o, hab, aab) {
 /* guarda-redes: chave «inicial. apelido» (o arquivo tem «S. Bobrovsky», a ESPN «Sergei Bobrovsky») */
 const normTxt = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z .'-]/g, '').trim();
 function gkKey(name) {
-  const s = normTxt(name).replace(/\s+/g, ' '); if (!s) return '';
+  const s = normTxt(name).replace(/\./g, '. ').replace(/\s+/g, ' ').trim(); if (!s) return '';
   const p = s.split(' '); if (p.length === 1) return p[0];
   const first = p[0].replace(/\./g, ''), last = p.slice(1).join(' ');
   return first[0] + '. ' + last;
@@ -172,7 +172,7 @@ function ingest(ev) {
       if (g.ot && Math.abs(g.hs - g.as) === 1) { g.rh = g.ra = Math.min(g.hs, g.as); }
       else if (g.ot) {                                      // dados estranhos: tenta pelos períodos
         const per3 = x => (x.linescores || []).slice(0, 3).reduce((t, p) => t + (scoreVal(p) || 0), 0);
-        g.rh = per3(H); g.ra = per3(A);
+        const a3 = per3(H), b3 = per3(A); if (a3 === b3 && a3 > 0 || (a3 === b3 && Math.min(g.hs, g.as) === 0)) { g.rh = a3; g.ra = b3; }   // senão fica sem resultado aos 60'
       } else { g.rh = g.hs; g.ra = g.as; }
     }
   }
@@ -182,7 +182,7 @@ function ingest(ev) {
   const ph = probablesOf(H), pa = probablesOf(A);
   if (ph) g.prH = ph; else if (old && old.prH) g.prH = old.prH;
   if (pa) g.prA = pa; else if (old && old.prA) g.prA = old.prA;
-  if (old) ['bx', 'shH', 'shA', 'gkH', 'gkA', 'sk'].forEach(k => { if (old[k] != null && g[k] == null) g[k] = old[k]; });
+  if (old) ['bx', 'bxn', 'shH', 'shA', 'gkH', 'gkA', 'sk'].forEach(k => { if (old[k] != null && g[k] == null) g[k] = old[k]; });
   DB.g[id] = g;
   return g;
 }
@@ -229,17 +229,17 @@ async function refresh() {
     for (let i = 0; d <= tom && i < 400; i++, d = ymdAdd(d, 1)) {
       if (DB.days[d] && d < ymdAdd(T, -2)) continue;
       setUpd(`⏳ A buscar ${d.slice(6)}/${d.slice(4, 6)} à ESPN…`);
-      try { const j = await getJSON(`${ESPN}/scoreboard?dates=${d}`); (j.events || []).forEach(e => { if (ingest(e)) got++; }); if (d < ymdAdd(T, -2)) DB.days[d] = 1; days++; }
+      try { const j = await getJSON(`${ESPN}/scoreboard?dates=${d}`); if (!j || !Array.isArray(j.events)) throw new Error('resposta sem jogos'); j.events.forEach(e => { if (ingest(e)) got++; }); if (d < ymdAdd(T, -2)) DB.days[d] = 1; days++; }
       catch (e) { fails++; if (i >= 2 && !got && fails >= i + 1) break; }
       await new Promise(r => setTimeout(r, 60));
     }
     saveDB();
     // box scores dos jogos acabados (remates e guarda-redes), até 40 de cada vez
-    const todo = Object.values(DB.g).filter(g => g.src === 'espn' && g.s === 'post' && !g.bx && g.ed > cut).sort((x, y) => x.d < y.d ? -1 : 1).slice(0, 40);
+    const todo = Object.values(DB.g).filter(g => g.src === 'espn' && g.s === 'post' && g.bx !== 1 && (g.bxn || 0) < 3 && g.ed > cut).sort((x, y) => x.d < y.d ? -1 : 1).slice(0, 40);
     let k = 0;
     for (const g of todo) {
       k++; setUpd(`⏳ Guarda-redes e remates ${k}/${todo.length}…`);
-      try { const j = await getJSON(`${ESPN}/summary?event=${g.id}`); if (!parseBox(j, g)) g.bx = -1; } catch (e) { }
+      g.bxn = (g.bxn || 0) + 1; try { const j = await getJSON(`${ESPN}/summary?event=${g.id}`); if (!parseBox(j, g)) g.bx = -1; } catch (e) { }
     }
     saveDB();
     MODEL = null; PC.clear();
@@ -300,8 +300,8 @@ function buildModel() {
   const lg = Object.assign({}, SEED.lg);
   // guarda-redes: chave «s. bobrovsky» → estado
   const GK = {};
-  Object.entries(SEED.gk).forEach(([id, v]) => { const k = gkKey(v[0]); GK[k] = { n: v[0], t: v[1], s0: v[2], s1: v[3], id }; });
-  const idName = {}; Object.entries(SEED.gk).forEach(([id, v]) => { idName[id] = gkKey(v[0]); });
+  const idName = {};
+  Object.entries(SEED.gk).sort((x, y) => y[1][3] - x[1][3]).forEach(([id, v]) => { let k = gkKey(v[0]); if (GK[k]) k += '|' + v[1]; GK[k] = { n: v[0], t: v[1], s0: v[2], s1: v[3], id }; idName[id] = k; });
   const starts = {}; Object.entries(SEED.starts || {}).forEach(([t, L]) => { starts[t] = L.map(id => idName[id]).filter(Boolean); });
   // jogos da época: arquivo + ESPN (depois do corte)
   const seedG = (SEED.games || []).map((r, i) => ({ id: 'n' + i, d: r[0] + 'T' + (r[1] || '23:00') + ':00Z', ed: r[0].replace(/-/g, ''), h: r[2], a: r[3], hs: r[4], as: r[5], rh: r[6], ra: r[7], ot: !!r[8], so: !!r[9], s: 'post', src: 'seed', gkHid: r[12], gkAid: r[13] }));
@@ -321,8 +321,10 @@ function buildModel() {
     A[h] = (A[h] || 0) + P.eta * rh_; D[a] = (D[a] || 0) - P.eta * rh_;
     A[a] = (A[a] || 0) + P.eta * ra_; D[h] = (D[h] || 0) - P.eta * ra_;
     let saT = 0, svT = 0;
-    [['gkH', h], ['gkA', a]].forEach(([k, t]) => (g[k] || []).forEach(([key, n, sa, sv], i) => {
+    [['gkH', h], ['gkA', a]].forEach(([k, t]) => (g[k] || []).forEach(([key0, n, sa, sv], i) => {
+      let key = key0;
       if (!(sa > 0)) return;
+      if (GK[key + '|' + t]) key = key + '|' + t;
       const s = GK[key] || (GK[key] = { n, t, s0: 0, s1: 0 }); s.t = t; const dc = decay(sa);
       s.s0 = s.s0 * dc + (sv - lg.sv * sa); s.s1 = s.s1 * dc + sa; saT += sa; svT += sv;
       if (i === 0) (starts[t] = starts[t] || []).push(key);
@@ -357,10 +359,14 @@ function gkList(M, t) {   // guarda-redes de uma equipa (mais titularidades rece
 function gkFor(g, side) {   // quem vai à baliza: escolha tua → provável da ESPN → o mais utilizado
   const M = getModel(), t = side === 'h' ? g.h : g.a;
   const sel = GKSEL[g.id] && GKSEL[g.id][side]; if (sel && M.GK[sel]) return { k: sel, how: 'escolhido por ti' };
-  const pr = side === 'h' ? g.prH : g.prA; if (pr) { const k = gkKey(pr); if (M.GK[k]) return { k, how: 'provável (ESPN)' }; }
+  const pr = side === 'h' ? g.prH : g.prA; if (pr) { let k = gkKey(pr); if (M.GK[k + '|' + t]) k = k + '|' + t; if (M.GK[k]) return { k, how: 'provável (ESPN)' }; return { k: null, how: 'provável (ESPN): ' + pr + ' — sem dados, conta como médio' }; }
   const L = gkList(M, t); return L.length ? { k: L[0].k, how: 'o mais utilizado' } : { k: null, how: '—' };
 }
-function restDays(M, t, g) { const l = M.LAST[t]; if (!l || l >= g.ed) return null; return ymdDiff(l, g.ed); }
+function restDays(M, t, g) {
+  let l = M.LAST[t] && M.LAST[t] < g.ed ? M.LAST[t] : null;
+  for (const x of Object.values(DB.g)) if ((x.h === t || x.a === t) && x.s !== 'off' && x.ed < g.ed && (!l || x.ed > l)) l = x.ed;   // jogos ainda por acabar também cansam
+  return l ? ymdDiff(l, g.ed) : null;
+}
 /* acerta as forças para que o vencedor (c/ prolongamento) bata com o alvo, e o total com o alvo de «mais de» */
 function lamFor(lh, la, P, pot) {
   const M = grid(lh, la, P); const hw = pWinReg(M), dr = pDraw(M);
@@ -374,7 +380,7 @@ function fitML(lh, la, P, pot, target) {
 function predict(g) {
   const M = getModel(), P = SEED.par, h = g.h, a = g.a;
   const gh = gkFor(g, 'h'), ga = gkFor(g, 'a'), o = g.o || {};
-  const key = [g.id, g.s, gh.k, ga.k, o.hml, o.aml, o.tl, o.ovo, M.nEspn, CFG.mktW, CFG.evMin, CFG.oddMin, CFG.oddMax, JSON.stringify(BO[g.id] || {})].join('|');
+  const key = [g.id, g.s, Object.keys(DB.g).length, gh.k, ga.k, o.hml, o.aml, o.tl, o.ovo, M.nEspn, CFG.mktW, CFG.evMin, CFG.oddMin, CFG.oddMax, JSON.stringify(BO[g.id] || {})].join('|');
   const hit = PC.get(g.id); if (hit && hit.k === key) return hit.P;
   const mu = Math.log(M.lg.g);
   const qh = gkQ(M, gh.k), qa = gkQ(M, ga.k);
@@ -511,7 +517,8 @@ function newBet(acc, g, c, stake, extra) {
 }
 function outcome(b, g) {
   if (g.s === 'off') return 'void';
-  if (g.s !== 'post' || g.hs == null || g.rh == null) return null;
+  if (g.s !== 'post' || g.hs == null) return null;
+  if (g.rh == null && ['1x2', 'dc', 'hc', 'tot'].includes(b.mk)) return null;
   const rh = g.rh, ra = g.ra, hs = g.hs, as = g.as;
   const wl = x => x > 1e-9 ? 'won' : x < -1e-9 ? 'lost' : 'push';
   switch (b.mk) {
@@ -614,7 +621,8 @@ function safeStats() {
 /* boletim seguro de cada dia, congelado antes do 1.º jogo */
 function snapshotSlips() {
   [0, 1].forEach(off => {
-    const d = ymdAdd(todayET(), off); if (SLIPS[d] && SLIPS[d].lock) return;
+    const d = ymdAdd(todayET(), off), old = SLIPS[d];
+    if (old && (old.lock || old.legs.some(l => { const g = DB.g[l.g]; return !g || g.s !== 'pre' || new Date(g.d).getTime() <= Date.now(); }))) { if (old) old.lock = 1; return; }
     const C = safeCands(off), pick = safeAuto(C), legs = C.filter((_, i) => pick.has(i));
     if (!legs.length) return;
     SLIPS[d] = { legs: legs.map(c => safeLeg(c)), p: r2(legs.reduce((a, c) => a * c.p, 1)), odd: r2(legs.reduce((a, c) => a * c.odd, 1)), t: Date.now() };
