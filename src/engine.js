@@ -378,10 +378,23 @@ function fitML(lh, la, P, pot, target) {
   for (let i = 0; i < 22; i++) { const s = (lo + hi) / 2, r = lamFor(lh * Math.exp(s), la * Math.exp(-s), P, pot); if (r.ml < target) lo = s; else hi = s; }
   const s = (lo + hi) / 2; return [lh * Math.exp(s), la * Math.exp(-s)];
 }
+/* o Gi aprende quanto confiar na casa: com as previsões que guardou ANTES de cada jogo,
+   procura o peso que mais acerta (w·casa + (1−w)·Gi), travado para não saltar com poucos jogos */
+let CALW = null;
+function calibW() {
+  if (CALW && CALW.k === Object.keys(PREDS).length + '|' + LS.get('last', 0)) return CALW;
+  const rows = [];
+  Object.entries(PREDS).forEach(([id, p]) => { const g = DB.g[id]; if (!g || g.s !== 'post' || g.hs == null || p.nv == null || p.mlM == null) return; rows.push([p.nv, p.mlM, g.hs > g.as ? 1 : 0]); });
+  let best = CFG.mktW, bl = Infinity;
+  for (let w = 0.5; w <= 1.0001; w += 0.05) { let l = 0; rows.forEach(([m, g, y]) => { const q = clamp(w * m + (1 - w) * g, 1e-4, 1 - 1e-4); l -= y ? Math.log(q) : Math.log(1 - q); }); if (l < bl) { bl = l; best = w; } }
+  const n = rows.length;
+  CALW = { k: Object.keys(PREDS).length + '|' + LS.get('last', 0), n, raw: best, w: clamp((n * best + 150 * CFG.mktW) / (n + 150), 0.5, 0.98) };
+  return CALW;
+}
 function predict(g) {
   const M = getModel(), P = SEED.par, h = g.h, a = g.a;
   const gh = gkFor(g, 'h'), ga = gkFor(g, 'a'), o = g.o || {};
-  const key = [g.id, g.s, Object.keys(DB.g).length, gh.k, ga.k, o.hml, o.aml, o.tl, o.ovo, M.nEspn, CFG.mktW, CFG.evMin, CFG.oddMin, CFG.oddMax, JSON.stringify(BO[g.id] || {})].join('|');
+  const key = [g.id, g.s, Object.keys(DB.g).length, gh.k, ga.k, o.hml, o.aml, o.tl, o.ovo, M.nEspn, CFG.mktW, calibW().w, CFG.evMin, CFG.oddMin, CFG.oddMax, JSON.stringify(BO[g.id] || {})].join('|');
   const hit = PC.get(g.id); if (hit && hit.k === key) return hit.P;
   const mu = Math.log(M.lg.g);
   const qh = gkQ(M, gh.k), qa = gkQ(M, ga.k);
@@ -394,7 +407,7 @@ function predict(g) {
   const mod = lamFor(lhM, laM, P, pot);
   let lh = lhM, la = laM, W = 0, pNV = null, tNV = null;
   // mistura com o mercado (vencedor c/ prolongamento da ESPN): a casa sabe coisas que o Gi não sabe (lesões, titulares)
-  if (o.hml > 1 && o.aml > 1) { pNV = (1 / o.hml) / (1 / o.hml + 1 / o.aml); W = CFG.mktW; [lh, la] = fitML(lhM, laM, P, pot, W * pNV + (1 - W) * mod.ml); }
+  if (o.hml > 1 && o.aml > 1) { pNV = (1 / o.hml) / (1 / o.hml + 1 / o.aml); W = calibW().w; [lh, la] = fitML(lhM, laM, P, pot, W * pNV + (1 - W) * mod.ml); }
   if (o.tl != null && o.ovo > 1 && o.uno > 1) {   // total da ESPN (conta prolongamento): acerta a soma dos golos
     tNV = (1 / o.ovo) / (1 / o.ovo + 1 / o.uno);
     const now = r => totOT(lamFor(lh * Math.exp(r), la * Math.exp(r), P, pot).M, o.tl);
