@@ -2,7 +2,7 @@
    - a app (index.html) e o arquivo (seed.json, players.json): rede primeiro; sem rede → os guardados
    - ícones, manifesto, fundo e tipos de letra: guardados
    - ESPN e pontes: nunca guardados (vão sempre à rede) */
-const VERSION = 'gi-v1.1.0';
+const VERSION = 'gi-v1.1.1';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './bg.webp', './seed.json', './players.json'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('gi-') && k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

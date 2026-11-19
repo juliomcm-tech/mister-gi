@@ -852,7 +852,7 @@ document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = ic(el.data
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (VIEWS.includes(v) && v !== VIEW) { VIEW = v; render(); } });
 render();
 function loadSeed() {
-  fetch('seed.json').then(r => r.json()).then(j => { SEED = j; MODEL = null; settleAll(); render(); loadPlayers(); })
+  fetch('seed.json').then(r => r.json()).then(j => { SEED = j; MODEL = null; settleAll(); render(); loadPlayers(); setTimeout(bossFeed, 50); })
     .catch(() => { $('#view').innerHTML = `<div class="pn empty" style="margin-top:40px"><div class="face">${giFace('sad')}</div>Não consegui abrir o arquivo do Gi.<br><button class="btn fill" style="margin-top:12px" onclick="loadSeed()">${ic('refresh')} Tentar outra vez</button></div>`; });
 }
 loadSeed();
